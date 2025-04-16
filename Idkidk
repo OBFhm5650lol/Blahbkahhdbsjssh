@@ -237,7 +237,7 @@ local function LoopBringPlayers()
                 
                 -- Calculate position behind the sword
                 local swordCF = SwordHandle.CFrame
-                local behindOffset = swordCF.LookVector * -4 -- 4 studs behind the sword
+                local behindOffset = swordCF.LookVector * -2 -- 4 studs behind the sword
                 
                 -- Make player face away from local player (opposite direction)
                 local lookDirection = -swordCF.LookVector
