@@ -1,0 +1,346 @@
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+-- GUI Setup with coding aesthetic
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CKillInstantGUI"
+ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 250, 0, 60)
+MainFrame.Position = UDim2.new(0.5, -125, 0, 10)
+MainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+MainFrame.BackgroundTransparency = 0.1
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Text = "INSTANTKILL"
+ToggleButton.Size = UDim2.new(0, 220, 0, 40)
+ToggleButton.Position = UDim2.new(0.5, -110, 0, 10)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(1, 0, 0)
+ToggleButton.BorderColor3 = Color3.fromRGB(80, 80, 90)
+ToggleButton.BorderSizePixel = 2
+ToggleButton.TextColor3 = Color3.fromRGB(0, 255, 0)
+ToggleButton.TextSize = 25
+ToggleButton.Font = Enum.Font.Code
+ToggleButton.TextXAlignment = Enum.TextXAlignment.Left
+ToggleButton.TextWrapped = true
+ToggleButton.ZIndex = 2
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Text = "x"
+CloseButton.Size = UDim2.new(0, 20, 0, 20)
+CloseButton.Position = UDim2.new(1, -25, 0, 5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+CloseButton.BackgroundTransparency = 0.1
+CloseButton.TextColor3 = Color3.fromRGB(109, 110, 108)
+CloseButton.TextSize = 14
+CloseButton.Font = Enum.Font.Code
+CloseButton.ZIndex = 3
+
+-- Visual elements
+local UIGradient = Instance.new("UIGradient")
+UIGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 0)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 100, 0))
+})
+UIGradient.Rotation = 90
+
+local StatusIndicator = Instance.new("Frame")
+StatusIndicator.Name = "StatusIndicator"
+StatusIndicator.Size = UDim2.new(0, 10, 0, 10)
+StatusIndicator.Position = UDim2.new(1, -15, 0.5, -5)
+StatusIndicator.AnchorPoint = Vector2.new(1, 0.5)
+StatusIndicator.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
+StatusIndicator.BorderSizePixel = 0
+StatusIndicator.ZIndex = 3
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 6)
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 4)
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 10)
+
+local Padding = Instance.new("UIPadding")
+Padding.PaddingLeft = UDim.new(0, 15)
+
+-- Assembly
+UIGradient.Parent = ToggleButton
+Corner.Parent = StatusIndicator
+MainCorner.Parent = MainFrame
+ButtonCorner.Parent = ToggleButton
+CloseCorner.Parent = CloseButton
+Padding.Parent = ToggleButton
+StatusIndicator.Parent = ToggleButton
+ToggleButton.Parent = MainFrame
+CloseButton.Parent = MainFrame
+
+-- State variables
+local Toggle = false
+local AutoSwing = false
+local OriginalPositions = {}
+local OriginalTransparency = {}
+local OriginalCanCollide = {}
+local Character
+local Dragging = false
+local DragStart, StartPos
+
+-- Draggable frame functionality
+local function onInputBegan(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.Position.X >= MainFrame.AbsolutePosition.X and input.Position.X <= MainFrame.AbsolutePosition.X + MainFrame.AbsoluteSize.X and
+           input.Position.Y >= MainFrame.AbsolutePosition.Y and input.Position.Y <= MainFrame.AbsolutePosition.Y + MainFrame.AbsoluteSize.Y then
+            Dragging = true
+            DragStart = input.Position
+            StartPos = MainFrame.Position
+            MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+        end
+    end
+end
+
+local function onInputChanged(input)
+    if Dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local Delta = input.Position - DragStart
+        MainFrame.Position = UDim2.new(
+            StartPos.X.Scale, StartPos.X.Offset + Delta.X,
+            StartPos.Y.Scale, StartPos.Y.Offset + Delta.Y
+        )
+    end
+end
+
+local function onInputEnded(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Dragging = false
+        MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    end
+end
+
+MainFrame.InputBegan:Connect(onInputBegan)
+MainFrame.InputChanged:Connect(onInputChanged)
+MainFrame.InputEnded:Connect(onInputEnded)
+
+-- Close button functionality
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+    if Toggle then
+        Toggle = false
+        RestoreOriginalStates()
+    end
+end)
+
+-- Sword functions
+local function IsHoldingSword()
+    if not Character then return nil end
+    local Tool = Character:FindFirstChildOfClass("Tool")
+    if Tool and Tool:FindFirstChild("Handle") then
+        return Tool
+    end
+    return nil
+end
+
+local function SwingSword()
+    local Sword = IsHoldingSword()
+    if Sword then
+        Sword:Activate()
+    end
+end
+
+-- Visibility management
+local function MakeCharacterInvisible(character)
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("BasePart") and not OriginalTransparency[part] then
+            OriginalTransparency[part] = part.Transparency
+            part.Transparency = 1
+        end
+    end
+end
+
+local function RestoreCharacterVisibility()
+    for part, transparency in pairs(OriginalTransparency) do
+        if part and part:IsDescendantOf(game) then
+            part.Transparency = transparency
+        end
+    end
+    OriginalTransparency = {}
+end
+
+-- Collision management
+local function RemovePlayerCollision(character)
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("BasePart") and not OriginalCanCollide[part] then
+            OriginalCanCollide[part] = part.CanCollide
+            part.CanCollide = false
+        end
+    end
+end
+
+local function RestorePlayerCollision()
+    for part, canCollide in pairs(OriginalCanCollide) do
+        if part and part:IsDescendantOf(game) then
+            part.CanCollide = canCollide
+        end
+    end
+    OriginalCanCollide = {}
+end
+
+-- State restoration
+local function RestoreOriginalStates()
+    for player, cframe in pairs(OriginalPositions) do
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            player.Character.HumanoidRootPart.CFrame = cframe
+        end
+    end
+    OriginalPositions = {}
+    RestoreCharacterVisibility()
+    RestorePlayerCollision()
+end
+
+-- Updated Player teleportation logic (now makes players face away)
+local function LoopBringPlayers()
+    local Sword = IsHoldingSword()
+    if not Sword then return end
+
+    local SwordHandle = Sword:FindFirstChild("Handle")
+    if not SwordHandle then return end
+    
+    local hasTeams = false
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Team then
+            hasTeams = true
+            break
+        end
+    end
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local isEnemy = not hasTeams or (player.Team ~= LocalPlayer.Team)
+            if isEnemy then
+                local RootPart = player.Character.HumanoidRootPart
+                if not OriginalPositions[player] then
+                    OriginalPositions[player] = RootPart.CFrame
+                end
+                
+                -- Calculate position behind the sword
+                local swordCF = SwordHandle.CFrame
+                local behindOffset = swordCF.LookVector * -4 -- 4 studs behind the sword
+                
+                -- Make player face away from local player (opposite direction)
+                local lookDirection = -swordCF.LookVector
+                local newPosition = swordCF.Position + behindOffset
+                
+                -- Create CFrame that faces away from local player
+                RootPart.CFrame = CFrame.new(newPosition, newPosition + lookDirection)
+                
+                MakeCharacterInvisible(player.Character)
+            end
+        end
+    end
+end
+
+-- Character handling
+local function onCharacterAdded(newCharacter)
+    Character = newCharacter
+
+    if Toggle then
+        RemovePlayerCollision(newCharacter)
+    end
+    
+    newCharacter.ChildRemoved:Connect(function(child)
+        if child:IsA("Tool") and child:FindFirstChild("Handle") then
+            RestoreOriginalStates()
+        end
+    end)
+end
+
+-- Initialize character
+if LocalPlayer.Character then
+    onCharacterAdded(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+
+-- Player management
+local function setupPlayer(player)
+    player.CharacterAdded:Connect(function()
+        if not Toggle then
+            task.wait(1)
+            RestoreCharacterVisibility()
+        end
+    end)
+end
+
+for _, player in pairs(Players:GetPlayers()) do
+    setupPlayer(player)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
+
+-- Toggle functionality
+ToggleButton.MouseButton1Click:Connect(function()
+    Toggle = not Toggle
+    if Toggle then
+        ToggleButton.Text = "INSTANTKILL()"
+        StatusIndicator.BackgroundColor3 = Color3.fromRGB(85, 255, 85)
+        AutoSwing = true
+        if LocalPlayer.Character then
+            RemovePlayerCollision(LocalPlayer.Character)
+        end
+    else
+        ToggleButton.Text = "INSTANTKILL"
+        StatusIndicator.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
+        AutoSwing = false
+        RestoreOriginalStates()
+    end
+end)
+
+-- Main loop
+RunService.RenderStepped:Connect(function()
+    if Toggle and Character then
+        if AutoSwing then
+            SwingSword()
+        end
+        LoopBringPlayers()
+    elseif not Toggle then
+        RestoreOriginalStates()
+    end
+end)
+
+-- Cleanup on window focus loss
+UserInputService.WindowFocusReleased:Connect(function()
+    RestoreOriginalStates()
+end)
+
+-- Hover effects
+ToggleButton.MouseEnter:Connect(function()
+    if not Dragging then
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    end
+end)
+
+ToggleButton.MouseLeave:Connect(function()
+    if not Dragging then
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(1, 0, 0)
+    end
+end)
+
+CloseButton.MouseEnter:Connect(function()
+    CloseButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+end)
+
+CloseButton.MouseLeave:Connect(function()
+    CloseButton.BackgroundColor3 = Color3.fromRGB(3, 3, 3)
+end)
