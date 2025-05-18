@@ -13,7 +13,7 @@ local SilentKillEnabled = false -- New SilentKill toggle
 
 -- Main GUI
 local MainGui = Instance.new("ScreenGui", PlayerGui)
-MainGui.Name = "KillAllUI"
+MainGui.Name = "MeleeKillGui"
 MainGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame", MainGui)
@@ -87,6 +87,17 @@ Btn.MouseButton1Click:Connect(function()
     Enabled = not Enabled
     Btn.Text = Enabled and "ON" or "OFF"
     Btn.TextColor3 = Enabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
+    
+    -- When turning off, restore all positions
+    if not Enabled then
+        for playerName, position in pairs(OriginalPositions) do
+            local player = Players:FindFirstChild(playerName)
+            if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                player.Character.HumanoidRootPart.CFrame = CFrame.new(position)
+            end
+        end
+        OriginalPositions = {}
+    end
 end)
 
 -- Player selection dropdown button (now next to the kill button)
@@ -303,6 +314,21 @@ local function flickerTeleport(player, targetCFrame, originalCFrame, duration)
     end
 end
 
+-- Function to restore player position
+local function restorePlayerPosition(playerName)
+    local position = OriginalPositions[playerName]
+    if position then
+        local player = Players:FindFirstChild(playerName)
+        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            player.Character.HumanoidRootPart.CFrame = CFrame.new(position)
+        end
+        OriginalPositions[playerName] = nil
+    end
+end
+
+-- Track killed players
+local KilledPlayers = {}
+
 -- Main kill function
 RunService.RenderStepped:Connect(function()
     if not Enabled then return end
@@ -317,8 +343,72 @@ RunService.RenderStepped:Connect(function()
         for _, plr in pairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer then
                 local char = plr.Character
-                if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+                if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
                     if LocalPlayer:DistanceFromCharacter(char.HumanoidRootPart.Position) <= 1000000 then
+                        -- Save original position if not already saved
+                        if not OriginalPositions[plr.Name] and char.Humanoid.Health > 0 then
+                            OriginalPositions[plr.Name] = char.HumanoidRootPart.Position
+                        end
+                        
+                        -- If player was alive but now dead, restore position
+                        if KilledPlayers[plr.Name] and char.Humanoid.Health <= 0 then
+                            restorePlayerPosition(plr.Name)
+                            KilledPlayers[plr.Name] = nil
+                        elseif char.Humanoid.Health > 0 then
+                            if SilentKillEnabled then
+                                -- Shake the tool instead of activating it
+                                spawn(function()
+                                    shakeTool(tool, 0.5, 0.3)
+                                end)
+                            else
+                                tool:Activate()
+                            end
+                            
+                            for _, part in pairs(char:GetChildren()) do
+                                if part:IsA("BasePart") then
+                                    firetouchinterest(handle, part, 0)
+                                    firetouchinterest(handle, part, 1)
+                                end
+                            end
+                            
+                            -- Mark player as killed
+                            KilledPlayers[plr.Name] = true
+                        end
+                    end
+                end
+            end
+        end
+    else
+        -- Targeted player kill with BringKill effects
+        local targetPlayer = Players:FindFirstChild(SelectedPlayer)
+        if targetPlayer then
+            local char = targetPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
+                if LocalPlayer:DistanceFromCharacter(char.HumanoidRootPart.Position) <= 1000000 then
+                    -- Save original position if not already saved
+                    if not OriginalPositions[targetPlayer.Name] and char.Humanoid.Health > 0 then
+                        OriginalPositions[targetPlayer.Name] = char.HumanoidRootPart.Position
+                    end
+                    
+                    local originalPos = OriginalPositions[targetPlayer.Name]
+                    local targetPos = handle.Position + Vector3.new(0, 3, 0) -- 3 studs above the sword
+                    
+                    -- If player was alive but now dead, restore position
+                    if KilledPlayers[targetPlayer.Name] and char.Humanoid.Health <= 0 then
+                        restorePlayerPosition(targetPlayer.Name)
+                        KilledPlayers[targetPlayer.Name] = nil
+                    elseif char.Humanoid.Health > 0 then
+                        if BringKillEnabled then
+                            -- Shake the player first
+                            spawn(function()
+                                shakeCharacter(char, 0.5, 0.3)
+                            end)
+                            
+                            -- Flicker teleport to sword
+                            flickerTeleport(targetPlayer, CFrame.new(targetPos), CFrame.new(originalPos), 0.5)
+                        end
+                        
+                        -- Kill with silent option
                         if SilentKillEnabled then
                             -- Shake the tool instead of activating it
                             spawn(function()
@@ -334,50 +424,9 @@ RunService.RenderStepped:Connect(function()
                                 firetouchinterest(handle, part, 1)
                             end
                         end
-                    end
-                end
-            end
-        end
-    else
-        -- Targeted player kill with BringKill effects
-        local targetPlayer = Players:FindFirstChild(SelectedPlayer)
-        if targetPlayer then
-            local char = targetPlayer.Character
-            if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
-                if LocalPlayer:DistanceFromCharacter(char.HumanoidRootPart.Position) <= 1000000 then
-                    -- Save original position if not already saved
-                    if not OriginalPositions[targetPlayer.Name] then
-                        OriginalPositions[targetPlayer.Name] = char.HumanoidRootPart.Position
-                    end
-                    
-                    local originalPos = OriginalPositions[targetPlayer.Name]
-                    local targetPos = handle.Position + Vector3.new(0, 3, 0) -- 3 studs above the sword
-                    
-                    if BringKillEnabled then
-                        -- Shake the player first
-                        spawn(function()
-                            shakeCharacter(char, 0.5, 0.3)
-                        end)
                         
-                        -- Flicker teleport to sword
-                        flickerTeleport(targetPlayer, CFrame.new(targetPos), CFrame.new(originalPos), 0.5)
-                    end
-                    
-                    -- Kill with silent option
-                    if SilentKillEnabled then
-                        -- Shake the tool instead of activating it
-                        spawn(function()
-                            shakeTool(tool, 0.5, 0.3)
-                        end)
-                    else
-                        tool:Activate()
-                    end
-                    
-                    for _, part in pairs(char:GetChildren()) do
-                        if part:IsA("BasePart") then
-                            firetouchinterest(handle, part, 0)
-                            firetouchinterest(handle, part, 1)
-                        end
+                        -- Mark player as killed
+                        KilledPlayers[targetPlayer.Name] = true
                     end
                 end
             end
@@ -395,6 +444,7 @@ LocalPlayer.CharacterRemoving:Connect(function()
         end
     end
     OriginalPositions = {}
+    KilledPlayers = {}
 end)
 
 -- Update dropdown when players join/leave
@@ -426,4 +476,4 @@ function notify(title, text, duration)
 end
 
 -- Use the func
-notify("Quick Reminder", "This Only Works With A Sword", 5)
+notify("Quick Reminder", "This Only Works With A Sword\n\n[Script Made By @hmmm5650]", 4)
