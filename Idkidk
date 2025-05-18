@@ -1,6 +1,15 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+-- Store original positions of players
+local OriginalPositions = {}
+local SelectedPlayer = "all" -- Default to kill all
+local BringKillEnabled = false
+local SilentKillEnabled = false -- New SilentKill toggle
 
 -- Main GUI
 local MainGui = Instance.new("ScreenGui", PlayerGui)
@@ -8,14 +17,14 @@ MainGui.Name = "KillAllUI"
 MainGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame", MainGui)
-MainFrame.Size = UDim2.new(0, 150, 0, 50)
-MainFrame.Position = UDim2.new(1, -160, 0, 10)
+MainFrame.Size = UDim2.new(0, 200, 0, 80) -- Increased height to accommodate new toggle
+MainFrame.Position = UDim2.new(1, -210, 0, 10)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 MainFrame.BackgroundTransparency = 0.2
 MainFrame.Active = true
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
--- Drag handle (now actually controls dragging)
+-- Drag handle
 local DragHandle = Instance.new("TextButton", MainFrame)
 DragHandle.Size = UDim2.new(1, 0, 0, 15)
 DragHandle.Position = UDim2.new(0, 0, 0, 0)
@@ -28,8 +37,6 @@ DragHandle.Font = Enum.Font.GothamBold
 Instance.new("UICorner", DragHandle).CornerRadius = UDim.new(0, 8)
 
 -- Make only the drag handle control dragging
-local UserInputService = game:GetService("UserInputService")
-
 local dragging = false
 local dragStart
 local startPos
@@ -64,8 +71,8 @@ end)
 
 -- Toggle button
 local Btn = Instance.new("TextButton", MainFrame)
-Btn.Size = UDim2.new(1, -10, 1, -20)
-Btn.Position = UDim2.new(0, 5, 0, 15)
+Btn.Size = UDim2.new(0.6, -10, 0, 25)
+Btn.Position = UDim2.new(0, 5, 0, 20)
 Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 Btn.BackgroundTransparency = 0.3
 Btn.TextColor3 = Color3.fromRGB(255, 80, 80)
@@ -82,22 +89,294 @@ Btn.MouseButton1Click:Connect(function()
     Btn.TextColor3 = Enabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
 end)
 
-game:GetService("RunService").RenderStepped:Connect(function()
+-- Player selection dropdown button (now next to the kill button)
+local PlayerDropdown = Instance.new("TextButton", MainFrame)
+PlayerDropdown.Size = UDim2.new(0.35, -5, 0, 25)
+PlayerDropdown.Position = UDim2.new(0.65, 5, 0, 20)
+PlayerDropdown.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+PlayerDropdown.BackgroundTransparency = 0.3
+PlayerDropdown.TextColor3 = Color3.fromRGB(200, 200, 200)
+PlayerDropdown.Font = Enum.Font.GothamBold
+PlayerDropdown.TextSize = 12 -- Smaller text to fit
+PlayerDropdown.Text = "all"
+Instance.new("UICorner", PlayerDropdown).CornerRadius = UDim.new(0, 6)
+
+-- SilentKill toggle button
+local SilentKillBtn = Instance.new("TextButton", MainFrame)
+SilentKillBtn.Size = UDim2.new(0.6, -10, 0, 25)
+SilentKillBtn.Position = UDim2.new(0, 5, 0, 50)
+SilentKillBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+SilentKillBtn.BackgroundTransparency = 0.3
+SilentKillBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+SilentKillBtn.Font = Enum.Font.GothamBold
+SilentKillBtn.TextSize = 14
+SilentKillBtn.Text = "SilentMode: OFF"
+Instance.new("UICorner", SilentKillBtn).CornerRadius = UDim.new(0, 6)
+
+SilentKillBtn.MouseButton1Click:Connect(function()
+    SilentKillEnabled = not SilentKillEnabled
+    SilentKillBtn.Text = SilentKillEnabled and "SilentMode: ON" or "SilentMode: OFF"
+    SilentKillBtn.TextColor3 = SilentKillEnabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
+end)
+
+-- Dropdown frame (now parented to MainFrame)
+local DropdownFrame = Instance.new("Frame", MainFrame)
+DropdownFrame.Size = UDim2.new(0, 150, 0, 0)
+DropdownFrame.Position = UDim2.new(0, PlayerDropdown.AbsolutePosition.X - MainFrame.AbsolutePosition.X, 0, PlayerDropdown.AbsolutePosition.Y - MainFrame.AbsolutePosition.Y + 30)
+DropdownFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+DropdownFrame.BackgroundTransparency = 0.2
+DropdownFrame.Visible = false
+DropdownFrame.ZIndex = 2 -- Ensure it appears above other elements
+Instance.new("UICorner", DropdownFrame).CornerRadius = UDim.new(0, 8)
+
+local AllOption = Instance.new("TextButton", DropdownFrame)
+AllOption.Size = UDim2.new(1, -10, 0, 25)
+AllOption.Position = UDim2.new(0, 5, 0, 5)
+AllOption.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+AllOption.BackgroundTransparency = 0.3
+AllOption.TextColor3 = Color3.fromRGB(200, 200, 200)
+AllOption.Font = Enum.Font.GothamBold
+AllOption.TextSize = 14
+AllOption.Text = "all"
+Instance.new("UICorner", AllOption).CornerRadius = UDim.new(0, 6)
+
+AllOption.MouseButton1Click:Connect(function()
+    SelectedPlayer = "all"
+    PlayerDropdown.Text = "all"
+    DropdownFrame.Visible = false
+    
+    -- Restore positions when changing target
+    for playerName, position in pairs(OriginalPositions) do
+        local player = Players:FindFirstChild(playerName)
+        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            player.Character.HumanoidRootPart.CFrame = CFrame.new(position)
+        end
+    end
+    OriginalPositions = {}
+end)
+
+local function updateDropdown()
+    -- Clear existing player options
+    for _, child in ipairs(DropdownFrame:GetChildren()) do
+        if child ~= AllOption then
+            child:Destroy()
+        end
+    end
+    
+    -- Add current players
+    local yOffset = 35
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local playerOption = Instance.new("TextButton", DropdownFrame)
+            playerOption.Size = UDim2.new(1, -10, 0, 25)
+            playerOption.Position = UDim2.new(0, 5, 0, yOffset)
+            playerOption.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            playerOption.BackgroundTransparency = 0.3
+            playerOption.TextColor3 = Color3.fromRGB(200, 200, 200)
+            playerOption.Font = Enum.Font.GothamBold
+            playerOption.TextSize = 14
+            playerOption.Text = player.Name
+            Instance.new("UICorner", playerOption).CornerRadius = UDim.new(0, 6)
+            
+            playerOption.MouseButton1Click:Connect(function()
+                SelectedPlayer = player.Name
+                PlayerDropdown.Text = player.Name
+                DropdownFrame.Visible = false
+                
+                -- Restore positions when changing target
+                for playerName, position in pairs(OriginalPositions) do
+                    local plr = Players:FindFirstChild(playerName)
+                    if plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                        plr.Character.HumanoidRootPart.CFrame = CFrame.new(position)
+                    end
+                end
+                OriginalPositions = {}
+            end)
+            
+            yOffset = yOffset + 30
+        end
+    end
+    
+    DropdownFrame.Size = UDim2.new(0, 150, 0, yOffset + 5)
+end
+
+PlayerDropdown.MouseButton1Click:Connect(function()
+    updateDropdown()
+    DropdownFrame.Visible = not DropdownFrame.Visible
+end)
+
+-- Close dropdown when clicking elsewhere
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if DropdownFrame.Visible then
+            local mousePos = input.Position
+            local dropdownPos = DropdownFrame.AbsolutePosition
+            local dropdownSize = DropdownFrame.AbsoluteSize
+            
+            -- Check if click is outside dropdown
+            if not (mousePos.X >= dropdownPos.X and mousePos.X <= dropdownPos.X + dropdownSize.X and
+                   mousePos.Y >= dropdownPos.Y and mousePos.Y <= dropdownPos.Y + dropdownSize.Y) then
+                DropdownFrame.Visible = false
+            end
+        end
+    end
+end)
+
+-- Function to shake a character
+local function shakeCharacter(char, intensity, duration)
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    
+    local root = char.HumanoidRootPart
+    local originalPosition = root.Position
+    
+    local startTime = os.clock()
+    while os.clock() - startTime < duration do
+        if not root or not root.Parent then break end
+        local offset = Vector3.new(
+            (math.random() * 2 - 1) * intensity,
+            (math.random() * 2 - 1) * intensity,
+            (math.random() * 2 - 1) * intensity
+        )
+        root.CFrame = CFrame.new(originalPosition + offset)
+        RunService.Heartbeat:Wait()
+    end
+    
+    if root and root.Parent then
+        root.CFrame = CFrame.new(originalPosition)
+    end
+end
+
+-- Function to shake a tool
+local function shakeTool(tool, intensity, duration)
+    if not tool or not tool:FindFirstChild("Handle") then return end
+
+    local character = tool.Parent
+    if not character or not character:IsA("Model") then return end
+
+    local rightGrip = character:FindFirstChild("RightGrip")
+    if not rightGrip or not rightGrip:IsA("Weld") then return end
+
+    local originalC0 = rightGrip.C0
+    local startTime = os.clock()
+
+    while os.clock() - startTime < duration do
+        if not rightGrip or not rightGrip.Parent then break end
+        local offset = CFrame.Angles(
+            math.rad(math.random(-intensity, intensity)),
+            math.rad(math.random(-intensity, intensity)),
+            math.rad(math.random(-intensity, intensity))
+        )
+        rightGrip.C0 = originalC0 * offset
+        RunService.Heartbeat:Wait()
+    end
+
+    if rightGrip and rightGrip.Parent then
+        rightGrip.C0 = originalC0
+    end
+end
+
+-- Function to flicker teleport a player
+local function flickerTeleport(player, targetCFrame, originalCFrame, duration)
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local root = player.Character.HumanoidRootPart
+    local startTime = os.clock()
+    local flickerCount = 0
+    
+    while os.clock() - startTime < duration do
+        if not root or not root.Parent then break end
+        
+        -- Alternate between target and original position
+        if flickerCount % 2 == 0 then
+            root.CFrame = targetCFrame
+        else
+            root.CFrame = originalCFrame
+        end
+        
+        flickerCount = flickerCount + 1
+        RunService.Heartbeat:Wait()
+    end
+    
+    -- End at target position
+    if root and root.Parent then
+        root.CFrame = targetCFrame
+    end
+end
+
+-- Main kill function
+RunService.RenderStepped:Connect(function()
     if not Enabled then return end
     
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer then
-            local char = plr.Character
-            if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
-                if LocalPlayer:DistanceFromCharacter(char.HumanoidRootPart.Position) <= 1000000 then
-                    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
-                    if tool and tool:FindFirstChild("Handle") then
-                        tool:Activate()
+    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if not tool or not tool:FindFirstChild("Handle") then return end
+    
+    local handle = tool.Handle
+    
+    if SelectedPlayer == "all" then
+        -- Normal kill all function
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                local char = plr.Character
+                if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+                    if LocalPlayer:DistanceFromCharacter(char.HumanoidRootPart.Position) <= 1000000 then
+                        if SilentKillEnabled then
+                            -- Shake the tool instead of activating it
+                            spawn(function()
+                                shakeTool(tool, 0.5, 0.3)
+                            end)
+                        else
+                            tool:Activate()
+                        end
+                        
                         for _, part in pairs(char:GetChildren()) do
                             if part:IsA("BasePart") then
-                                firetouchinterest(tool.Handle, part, 0)
-                                firetouchinterest(tool.Handle, part, 1)
+                                firetouchinterest(handle, part, 0)
+                                firetouchinterest(handle, part, 1)
                             end
+                        end
+                    end
+                end
+            end
+        end
+    else
+        -- Targeted player kill with BringKill effects
+        local targetPlayer = Players:FindFirstChild(SelectedPlayer)
+        if targetPlayer then
+            local char = targetPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+                if LocalPlayer:DistanceFromCharacter(char.HumanoidRootPart.Position) <= 1000000 then
+                    -- Save original position if not already saved
+                    if not OriginalPositions[targetPlayer.Name] then
+                        OriginalPositions[targetPlayer.Name] = char.HumanoidRootPart.Position
+                    end
+                    
+                    local originalPos = OriginalPositions[targetPlayer.Name]
+                    local targetPos = handle.Position + Vector3.new(0, 3, 0) -- 3 studs above the sword
+                    
+                    if BringKillEnabled then
+                        -- Shake the player first
+                        spawn(function()
+                            shakeCharacter(char, 0.5, 0.3)
+                        end)
+                        
+                        -- Flicker teleport to sword
+                        flickerTeleport(targetPlayer, CFrame.new(targetPos), CFrame.new(originalPos), 0.5)
+                    end
+                    
+                    -- Kill with silent option
+                    if SilentKillEnabled then
+                        -- Shake the tool instead of activating it
+                        spawn(function()
+                            shakeTool(tool, 0.5, 0.3)
+                        end)
+                    else
+                        tool:Activate()
+                    end
+                    
+                    for _, part in pairs(char:GetChildren()) do
+                        if part:IsA("BasePart") then
+                            firetouchinterest(handle, part, 0)
+                            firetouchinterest(handle, part, 1)
                         end
                     end
                 end
@@ -106,8 +385,45 @@ game:GetService("RunService").RenderStepped:Connect(function()
     end
 end)
 
+-- Clean up when tool is unequipped
+LocalPlayer.CharacterRemoving:Connect(function()
+    -- Restore all positions when character is removed (tool unequipped)
+    for playerName, position in pairs(OriginalPositions) do
+        local player = Players:FindFirstChild(playerName)
+        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            player.Character.HumanoidRootPart.CFrame = CFrame.new(position)
+        end
+    end
+    OriginalPositions = {}
+end)
+
+-- Update dropdown when players join/leave
+Players.PlayerAdded:Connect(updateDropdown)
+Players.PlayerRemoving:Connect(updateDropdown)
+
 -- [ LoadsScriptResources ]
 pcall(function()
-loadstring(game:HttpGet("https://raw.githubusercontent.com/hm5650/LoadResources/refs/heads/main/ResSourcesLoaderSource", true))()
-warn("StartedScript")
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/hm5650/LoadResources/refs/heads/main/ResSourcesLoaderSource", true))()
+    warn("StartedScript")
 end)
+
+-- [[ THIS IS A SNIPPET ]] --
+
+-- Import the Library
+local fnl = loadstring(game:HttpGetAsync 'https://raw.githubusercontent.com/Code1Tech/utils/main/notification.lua')()
+
+-- Make a Notification function
+function notify(title, text, duration)
+  title = title or "Notification"
+  text = text or "No text provided."
+  duration = duration or 5
+  
+  fnl:MakeNotification({
+    Title = title,
+    Text = text,
+    Duration = duration
+  })
+end
+
+-- Use the func
+notify("Quick Reminder", "This Only Works With A Sword", 5)
