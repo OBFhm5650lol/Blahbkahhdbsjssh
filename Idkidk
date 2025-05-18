@@ -10,6 +10,7 @@ local OriginalPositions = {}
 local SelectedPlayer = "all" -- Default to kill all
 local BringKillEnabled = false
 local SilentKillEnabled = false
+local ViewingEnabled = false
 
 -- Main GUI
 local MainGui = Instance.new("ScreenGui", PlayerGui)
@@ -112,6 +113,17 @@ PlayerDropdown.TextSize = 12 -- Smaller text to fit
 PlayerDropdown.Text = "all"
 Instance.new("UICorner", PlayerDropdown).CornerRadius = UDim.new(0, 6)
 
+local ViewPlayerBtn = Instance.new("TextButton", MainFrame)
+ViewPlayerBtn.Size = UDim2.new(0.35, -5, 0, 25)
+ViewPlayerBtn.Position = UDim2.new(0.65, 5, 0, 50)
+ViewPlayerBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ViewPlayerBtn.BackgroundTransparency = 0.3
+ViewPlayerBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+ViewPlayerBtn.Font = Enum.Font.GothamBold
+ViewPlayerBtn.TextSize = 12
+ViewPlayerBtn.Text = "View: OFF"
+Instance.new("UICorner", ViewPlayerBtn).CornerRadius = UDim.new(0, 6)
+
 -- SilentKill toggle button
 local SilentKillBtn = Instance.new("TextButton", MainFrame)
 SilentKillBtn.Size = UDim2.new(0.6, -10, 0, 25)
@@ -132,23 +144,37 @@ end)
 
 -- Dropdown frame (now parented to MainFrame)
 local DropdownFrame = Instance.new("Frame", MainFrame)
-DropdownFrame.Size = UDim2.new(0, 150, 0, 0)
+DropdownFrame.Size = UDim2.new(0, 150, 0, 150) -- Fixed height for scrolling
 DropdownFrame.Position = UDim2.new(0, PlayerDropdown.AbsolutePosition.X - MainFrame.AbsolutePosition.X, 0, PlayerDropdown.AbsolutePosition.Y - MainFrame.AbsolutePosition.Y + 30)
 DropdownFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 DropdownFrame.BackgroundTransparency = 0.2
 DropdownFrame.Visible = false
 DropdownFrame.ZIndex = 2 -- Ensure it appears above other elements
+DropdownFrame.ClipsDescendants = true -- Important for scrolling
 Instance.new("UICorner", DropdownFrame).CornerRadius = UDim.new(0, 8)
 
-local AllOption = Instance.new("TextButton", DropdownFrame)
+-- Scrolling frame for dropdown content
+local DropdownScroll = Instance.new("ScrollingFrame", DropdownFrame)
+DropdownScroll.Size = UDim2.new(1, 0, 1, 0)
+DropdownScroll.BackgroundTransparency = 1
+DropdownScroll.ScrollBarThickness = 5
+DropdownScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+DropdownScroll.CanvasSize = UDim2.new(0, 0, 0, 0) -- Will be updated dynamically
+DropdownScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y -- Auto-size to content
+
+local DropdownLayout = Instance.new("UIListLayout", DropdownScroll)
+DropdownLayout.Padding = UDim.new(0, 5)
+DropdownLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local AllOption = Instance.new("TextButton", DropdownScroll)
 AllOption.Size = UDim2.new(1, -10, 0, 25)
-AllOption.Position = UDim2.new(0, 5, 0, 5)
 AllOption.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 AllOption.BackgroundTransparency = 0.3
 AllOption.TextColor3 = Color3.fromRGB(200, 200, 200)
 AllOption.Font = Enum.Font.GothamBold
 AllOption.TextSize = 14
 AllOption.Text = "all"
+AllOption.LayoutOrder = 0
 Instance.new("UICorner", AllOption).CornerRadius = UDim.new(0, 6)
 
 AllOption.MouseButton1Click:Connect(function()
@@ -167,26 +193,26 @@ AllOption.MouseButton1Click:Connect(function()
 end)
 
 local function updateDropdown()
-    -- Clear existing player options
-    for _, child in ipairs(DropdownFrame:GetChildren()) do
-        if child ~= AllOption then
+    -- Clear existing player options (except "all" option)
+    for _, child in ipairs(DropdownScroll:GetChildren()) do
+        if child ~= AllOption and child ~= DropdownLayout then
             child:Destroy()
         end
     end
     
     -- Add current players
-    local yOffset = 35
+    local yOffset = 0
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
-            local playerOption = Instance.new("TextButton", DropdownFrame)
+            local playerOption = Instance.new("TextButton", DropdownScroll)
             playerOption.Size = UDim2.new(1, -10, 0, 25)
-            playerOption.Position = UDim2.new(0, 5, 0, yOffset)
             playerOption.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
             playerOption.BackgroundTransparency = 0.3
             playerOption.TextColor3 = Color3.fromRGB(200, 200, 200)
             playerOption.Font = Enum.Font.GothamBold
             playerOption.TextSize = 14
             playerOption.Text = player.Name
+            playerOption.LayoutOrder = yOffset + 1
             Instance.new("UICorner", playerOption).CornerRadius = UDim.new(0, 6)
             
             playerOption.MouseButton1Click:Connect(function()
@@ -204,11 +230,11 @@ local function updateDropdown()
                 OriginalPositions = {}
             end)
             
-            yOffset = yOffset + 30
+            yOffset = yOffset + 1
         end
     end
     
-    DropdownFrame.Size = UDim2.new(0, 150, 0, yOffset + 5)
+    -- Update canvas size (handled automatically by AutomaticCanvasSize)
 end
 
 PlayerDropdown.MouseButton1Click:Connect(function()
@@ -233,8 +259,54 @@ UserInputService.InputBegan:Connect(function(input)
     end
 end)
 
--- Function to swing/slash the tool
-local function swingTool(tool)
+local CurrentCamera = workspace.CurrentCamera
+
+ViewPlayerBtn.MouseButton1Click:Connect(function()
+    ViewingEnabled = not ViewingEnabled
+    ViewPlayerBtn.Text = ViewingEnabled and "View: ON" or "View: OFF"
+    ViewPlayerBtn.TextColor3 = ViewingEnabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
+
+    if not ViewingEnabled then
+        CurrentCamera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+    end
+end)
+
+-- Update camera every frame if viewing is enabled
+RunService.RenderStepped:Connect(function()
+    if ViewingEnabled and SelectedPlayer ~= "all" then
+        local targetPlayer = Players:FindFirstChild(SelectedPlayer)
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") then
+            CurrentCamera.CameraSubject = targetPlayer.Character.Humanoid
+        end
+    end
+end)
+
+-- Function to shake a character
+local function shakeCharacter(char, intensity, duration)
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    
+    local root = char.HumanoidRootPart
+    local originalPosition = root.Position
+    
+    local startTime = os.clock()
+    while os.clock() - startTime < duration do
+        if not root or not root.Parent then break end
+        local offset = Vector3.new(
+            (math.random() * 2 - 1) * intensity,
+            (math.random() * 2 - 1) * intensity,
+            (math.random() * 2 - 1) * intensity
+        )
+        root.CFrame = CFrame.new(originalPosition + offset)
+        RunService.Heartbeat:Wait()
+    end
+    
+    if root and root.Parent then
+        root.CFrame = CFrame.new(originalPosition)
+    end
+end
+
+-- Function to shake a tool
+local function shakeTool(tool, intensity, duration)
     if not tool or not tool:FindFirstChild("Handle") then return end
 
     local character = tool.Parent
@@ -244,16 +316,19 @@ local function swingTool(tool)
     if not rightGrip or not rightGrip:IsA("Weld") then return end
 
     local originalC0 = rightGrip.C0
-    
-    -- Swing animation
-    for i = 1, 5 do
+    local startTime = os.clock()
+
+    while os.clock() - startTime < duration do
         if not rightGrip or not rightGrip.Parent then break end
-        local angle = math.rad(30 * i)
-        rightGrip.C0 = originalC0 * CFrame.Angles(angle, 0, 0)
+        local offset = CFrame.Angles(
+            math.rad(math.random(-intensity, intensity)),
+            math.rad(math.random(-intensity, intensity)),
+            math.rad(math.random(-intensity, intensity))
+        )
+        rightGrip.C0 = originalC0 * offset
         RunService.Heartbeat:Wait()
     end
-    
-    -- Return to original position
+
     if rightGrip and rightGrip.Parent then
         rightGrip.C0 = originalC0
     end
@@ -329,9 +404,9 @@ RunService.RenderStepped:Connect(function()
                             KilledPlayers[plr.Name] = nil
                         elseif char.Humanoid.Health > 0 then
                             if SilentKillEnabled then
-                                -- Swing/slash the tool instead of shaking it
+                                -- Shake the tool instead of activating it
                                 spawn(function()
-                                    swingTool(tool)
+                                    shakeTool(tool, 0.5, 0.3)
                                 end)
                             else
                                 tool:Activate()
@@ -372,15 +447,20 @@ RunService.RenderStepped:Connect(function()
                         KilledPlayers[targetPlayer.Name] = nil
                     elseif char.Humanoid.Health > 0 then
                         if BringKillEnabled then
+                            -- Shake the player first
+                            spawn(function()
+                                shakeCharacter(char, 0.5, 0.3)
+                            end)
+                            
                             -- Flicker teleport to sword
                             flickerTeleport(targetPlayer, CFrame.new(targetPos), CFrame.new(originalPos), 0.5)
                         end
                         
                         -- Kill with silent option
                         if SilentKillEnabled then
-                            -- Swing/slash the tool instead of shaking it
+                            -- Shake the tool instead of activating it
                             spawn(function()
-                                swingTool(tool)
+                                shakeTool(tool, 0.5, 0.3)
                             end)
                         else
                             tool:Activate()
@@ -444,4 +524,4 @@ function notify(title, text, duration)
 end
 
 -- Use the func
-notify("Quick Reminder", "This Only Works With A Sword\n\n[Script Made By @hmmm5650]", 4)
+notify("Quick Reminder", "This Only Works With A Sword\n\n[Script Made By @hmmm5650]", 3.5)
