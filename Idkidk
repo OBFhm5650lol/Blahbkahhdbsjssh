@@ -9,7 +9,7 @@ local TweenService = game:GetService("TweenService")
 local OriginalPositions = {}
 local SelectedPlayer = "all" -- Default to kill all
 local BringKillEnabled = false
-local SilentKillEnabled = false -- New SilentKill toggle
+local SilentKillEnabled = false
 
 -- Main GUI
 local MainGui = Instance.new("ScreenGui", PlayerGui)
@@ -233,32 +233,8 @@ UserInputService.InputBegan:Connect(function(input)
     end
 end)
 
--- Function to shake a character
-local function shakeCharacter(char, intensity, duration)
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
-    local root = char.HumanoidRootPart
-    local originalPosition = root.Position
-    
-    local startTime = os.clock()
-    while os.clock() - startTime < duration do
-        if not root or not root.Parent then break end
-        local offset = Vector3.new(
-            (math.random() * 2 - 1) * intensity,
-            (math.random() * 2 - 1) * intensity,
-            (math.random() * 2 - 1) * intensity
-        )
-        root.CFrame = CFrame.new(originalPosition + offset)
-        RunService.Heartbeat:Wait()
-    end
-    
-    if root and root.Parent then
-        root.CFrame = CFrame.new(originalPosition)
-    end
-end
-
--- Function to shake a tool
-local function shakeTool(tool, intensity, duration)
+-- Function to swing/slash the tool
+local function swingTool(tool)
     if not tool or not tool:FindFirstChild("Handle") then return end
 
     local character = tool.Parent
@@ -268,19 +244,16 @@ local function shakeTool(tool, intensity, duration)
     if not rightGrip or not rightGrip:IsA("Weld") then return end
 
     local originalC0 = rightGrip.C0
-    local startTime = os.clock()
-
-    while os.clock() - startTime < duration do
+    
+    -- Swing animation
+    for i = 1, 5 do
         if not rightGrip or not rightGrip.Parent then break end
-        local offset = CFrame.Angles(
-            math.rad(math.random(-intensity, intensity)),
-            math.rad(math.random(-intensity, intensity)),
-            math.rad(math.random(-intensity, intensity))
-        )
-        rightGrip.C0 = originalC0 * offset
+        local angle = math.rad(30 * i)
+        rightGrip.C0 = originalC0 * CFrame.Angles(angle, 0, 0)
         RunService.Heartbeat:Wait()
     end
-
+    
+    -- Return to original position
     if rightGrip and rightGrip.Parent then
         rightGrip.C0 = originalC0
     end
@@ -356,9 +329,9 @@ RunService.RenderStepped:Connect(function()
                             KilledPlayers[plr.Name] = nil
                         elseif char.Humanoid.Health > 0 then
                             if SilentKillEnabled then
-                                -- Shake the tool instead of activating it
+                                -- Swing/slash the tool instead of shaking it
                                 spawn(function()
-                                    shakeTool(tool, 0.5, 0.3)
+                                    swingTool(tool)
                                 end)
                             else
                                 tool:Activate()
@@ -399,20 +372,15 @@ RunService.RenderStepped:Connect(function()
                         KilledPlayers[targetPlayer.Name] = nil
                     elseif char.Humanoid.Health > 0 then
                         if BringKillEnabled then
-                            -- Shake the player first
-                            spawn(function()
-                                shakeCharacter(char, 0.5, 0.3)
-                            end)
-                            
                             -- Flicker teleport to sword
                             flickerTeleport(targetPlayer, CFrame.new(targetPos), CFrame.new(originalPos), 0.5)
                         end
                         
                         -- Kill with silent option
                         if SilentKillEnabled then
-                            -- Shake the tool instead of activating it
+                            -- Swing/slash the tool instead of shaking it
                             spawn(function()
-                                shakeTool(tool, 0.5, 0.3)
+                                swingTool(tool)
                             end)
                         else
                             tool:Activate()
