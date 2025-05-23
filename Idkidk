@@ -79,14 +79,14 @@ Btn.BackgroundTransparency = 0.3
 Btn.TextColor3 = Color3.fromRGB(255, 80, 80)
 Btn.Font = Enum.Font.GothamBold
 Btn.TextSize = 14
-Btn.Text = "OFF"
+Btn.Text = "Start: OFF"
 Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
 
 local Enabled = false
 
 Btn.MouseButton1Click:Connect(function()
     Enabled = not Enabled
-    Btn.Text = Enabled and "ON" or "OFF"
+    Btn.Text = Enabled and "Start: ON" or "Start: OFF"
     Btn.TextColor3 = Enabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
     
     -- When turning off, restore all positions
@@ -104,7 +104,7 @@ end)
 -- Player selection dropdown button (now next to the kill button)
 local PlayerDropdown = Instance.new("TextButton", MainFrame)
 PlayerDropdown.Size = UDim2.new(0.35, -5, 0, 25)
-PlayerDropdown.Position = UDim2.new(0.65, 5, 0, 20)
+PlayerDropdown.Position = UDim2.new(0.63, 5, 0, 20)
 PlayerDropdown.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 PlayerDropdown.BackgroundTransparency = 0.3
 PlayerDropdown.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -115,7 +115,7 @@ Instance.new("UICorner", PlayerDropdown).CornerRadius = UDim.new(0, 6)
 
 local ViewPlayerBtn = Instance.new("TextButton", MainFrame)
 ViewPlayerBtn.Size = UDim2.new(0.35, -5, 0, 25)
-ViewPlayerBtn.Position = UDim2.new(0.65, 5, 0, 50)
+ViewPlayerBtn.Position = UDim2.new(0.63, 5, 0, 50)
 ViewPlayerBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 ViewPlayerBtn.BackgroundTransparency = 0.3
 ViewPlayerBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
