@@ -11,6 +11,7 @@ local SelectedPlayer = "all" -- Default to kill all
 local BringKillEnabled = false
 local SilentKillEnabled = false
 local ViewingEnabled = false
+local ScriptEnabled = true -- Added to track if script is enabled
 
 -- Main GUI
 local MainGui = Instance.new("ScreenGui", PlayerGui)
@@ -25,15 +26,45 @@ MainFrame.BackgroundTransparency = 0.2
 MainFrame.Active = true
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
+-- Close button (added at top right)
+local CloseButton = Instance.new("TextButton", MainFrame)
+CloseButton.Size = UDim2.new(0, 20, 0, 20)
+CloseButton.Position = UDim2.new(1, -25, 0, 0)
+CloseButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+CloseButton.BackgroundTransparency = 0.7
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.Text = "x"
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.TextSize = 14
+Instance.new("UICorner", CloseButton).CornerRadius = UDim.new(0, 6)
+
+CloseButton.MouseButton1Click:Connect(function()
+    ScriptEnabled = false
+    MainGui:Destroy()
+    
+    -- Restore all positions when closing
+    for playerName, position in pairs(OriginalPositions) do
+        local player = Players:FindFirstChild(playerName)
+        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            player.Character.HumanoidRootPart.CFrame = CFrame.new(position)
+        end
+    end
+    
+    -- Reset camera if viewing was enabled
+    if ViewingEnabled and CurrentCamera then
+        CurrentCamera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+    end
+end)
+
 -- Drag handle
 local DragHandle = Instance.new("TextButton", MainFrame)
-DragHandle.Size = UDim2.new(1, 0, 0, 15)
+DragHandle.Size = UDim2.new(1, -25, 0, 15)
 DragHandle.Position = UDim2.new(0, 0, 0, 0)
 DragHandle.BackgroundTransparency = 0.7
 DragHandle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-DragHandle.Text = "≡"
+DragHandle.Text = "≡≡≡"
 DragHandle.TextColor3 = Color3.fromRGB(200, 200, 200)
-DragHandle.TextSize = 12
+DragHandle.TextSize = 14
 DragHandle.Font = Enum.Font.GothamBold
 Instance.new("UICorner", DragHandle).CornerRadius = UDim.new(0, 8)
 
@@ -85,6 +116,8 @@ Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
 local Enabled = false
 
 Btn.MouseButton1Click:Connect(function()
+    if not ScriptEnabled then return end
+    
     Enabled = not Enabled
     Btn.Text = Enabled and "Start: ON" or "Start: OFF"
     Btn.TextColor3 = Enabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
@@ -137,6 +170,7 @@ SilentKillBtn.Text = "SilentMode: OFF"
 Instance.new("UICorner", SilentKillBtn).CornerRadius = UDim.new(0, 6)
 
 SilentKillBtn.MouseButton1Click:Connect(function()
+    if not ScriptEnabled then return end
     SilentKillEnabled = not SilentKillEnabled
     SilentKillBtn.Text = SilentKillEnabled and "SilentMode: ON" or "SilentMode: OFF"
     SilentKillBtn.TextColor3 = SilentKillEnabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
@@ -178,21 +212,23 @@ AllOption.LayoutOrder = 0
 Instance.new("UICorner", AllOption).CornerRadius = UDim.new(0, 6)
 
 AllOption.MouseButton1Click:Connect(function()
+    if not ScriptEnabled then return end
     SelectedPlayer = "all"
     PlayerDropdown.Text = "all"
     DropdownFrame.Visible = false
     
     -- Restore positions when changing target
     for playerName, position in pairs(OriginalPositions) do
-        local player = Players:FindFirstChild(playerName)
-        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            player.Character.HumanoidRootPart.CFrame = CFrame.new(position)
+        local plr = Players:FindFirstChild(playerName)
+        if plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            plr.Character.HumanoidRootPart.CFrame = CFrame.new(position)
         end
     end
     OriginalPositions = {}
 end)
 
 local function updateDropdown()
+    if not ScriptEnabled then return end
     -- Clear existing player options (except "all" option)
     for _, child in ipairs(DropdownScroll:GetChildren()) do
         if child ~= AllOption and child ~= DropdownLayout then
@@ -216,6 +252,7 @@ local function updateDropdown()
             Instance.new("UICorner", playerOption).CornerRadius = UDim.new(0, 6)
             
             playerOption.MouseButton1Click:Connect(function()
+                if not ScriptEnabled then return end
                 SelectedPlayer = player.Name
                 PlayerDropdown.Text = player.Name
                 DropdownFrame.Visible = false
@@ -238,12 +275,14 @@ local function updateDropdown()
 end
 
 PlayerDropdown.MouseButton1Click:Connect(function()
+    if not ScriptEnabled then return end
     updateDropdown()
     DropdownFrame.Visible = not DropdownFrame.Visible
 end)
 
 -- Close dropdown when clicking elsewhere
 UserInputService.InputBegan:Connect(function(input)
+    if not ScriptEnabled then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         if DropdownFrame.Visible then
             local mousePos = input.Position
@@ -262,6 +301,7 @@ end)
 local CurrentCamera = workspace.CurrentCamera
 
 ViewPlayerBtn.MouseButton1Click:Connect(function()
+    if not ScriptEnabled then return end
     ViewingEnabled = not ViewingEnabled
     ViewPlayerBtn.Text = ViewingEnabled and "View: ON" or "View: OFF"
     ViewPlayerBtn.TextColor3 = ViewingEnabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
@@ -273,6 +313,7 @@ end)
 
 -- Update camera every frame if viewing is enabled
 RunService.RenderStepped:Connect(function()
+    if not ScriptEnabled then return end
     if ViewingEnabled and SelectedPlayer ~= "all" then
         local targetPlayer = Players:FindFirstChild(SelectedPlayer)
         if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") then
@@ -379,7 +420,7 @@ local KilledPlayers = {}
 
 -- Main kill function
 RunService.RenderStepped:Connect(function()
-    if not Enabled then return end
+    if not ScriptEnabled or not Enabled then return end
     
     local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
     if not tool or not tool:FindFirstChild("Handle") then return end
@@ -484,6 +525,7 @@ end)
 
 -- Clean up when tool is unequipped
 LocalPlayer.CharacterRemoving:Connect(function()
+    if not ScriptEnabled then return end
     -- Restore all positions when character is removed (tool unequipped)
     for playerName, position in pairs(OriginalPositions) do
         local player = Players:FindFirstChild(playerName)
@@ -496,8 +538,17 @@ LocalPlayer.CharacterRemoving:Connect(function()
 end)
 
 -- Update dropdown when players join/leave
-Players.PlayerAdded:Connect(updateDropdown)
-Players.PlayerRemoving:Connect(updateDropdown)
+Players.PlayerAdded:Connect(function()
+    if ScriptEnabled then
+        updateDropdown()
+    end
+end)
+
+Players.PlayerRemoving:Connect(function()
+    if ScriptEnabled then
+        updateDropdown()
+    end
+end)
 
 -- [ LoadsScriptResources ]
 pcall(function()
