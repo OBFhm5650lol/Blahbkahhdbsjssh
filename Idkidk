@@ -11,7 +11,10 @@ local SelectedPlayer = "all" -- Default to kill all
 local BringKillEnabled = false
 local SilentKillEnabled = false
 local ViewingEnabled = false
-local ScriptEnabled = true -- Added to track if script is enabled
+local ClickKillEnabled = false
+local CurrentTargetHighlight = nil
+local ScriptEnabled = true
+local KillActive = false -- New variable to control killing state
 
 -- Main GUI
 local MainGui = Instance.new("ScreenGui", PlayerGui)
@@ -19,14 +22,14 @@ MainGui.Name = "MeleeKillGui"
 MainGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame", MainGui)
-MainFrame.Size = UDim2.new(0, 200, 0, 80) -- Increased height to accommodate new toggle
+MainFrame.Size = UDim2.new(0, 200, 0, 110)
 MainFrame.Position = UDim2.new(1, -210, 0, 10)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 MainFrame.BackgroundTransparency = 0.2
 MainFrame.Active = true
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
--- Close button (added at top right)
+-- Close button
 local CloseButton = Instance.new("TextButton", MainFrame)
 CloseButton.Size = UDim2.new(0, 20, 0, 20)
 CloseButton.Position = UDim2.new(1, -25, 0, 0)
@@ -42,7 +45,6 @@ CloseButton.MouseButton1Click:Connect(function()
     ScriptEnabled = false
     MainGui:Destroy()
     
-    -- Restore all positions when closing
     for playerName, position in pairs(OriginalPositions) do
         local player = Players:FindFirstChild(playerName)
         if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
@@ -50,7 +52,6 @@ CloseButton.MouseButton1Click:Connect(function()
         end
     end
     
-    -- Reset camera if viewing was enabled
     if ViewingEnabled and CurrentCamera then
         CurrentCamera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
     end
@@ -68,7 +69,6 @@ DragHandle.TextSize = 14
 DragHandle.Font = Enum.Font.GothamBold
 Instance.new("UICorner", DragHandle).CornerRadius = UDim.new(0, 8)
 
--- Make only the drag handle control dragging
 local dragging = false
 local dragStart
 local startPos
@@ -113,17 +113,14 @@ Btn.TextSize = 14
 Btn.Text = "Start: OFF"
 Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
 
-local Enabled = false
-
 Btn.MouseButton1Click:Connect(function()
     if not ScriptEnabled then return end
     
-    Enabled = not Enabled
-    Btn.Text = Enabled and "Start: ON" or "Start: OFF"
-    Btn.TextColor3 = Enabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
+    KillActive = not KillActive
+    Btn.Text = KillActive and "Start: ON" or "Start: OFF"
+    Btn.TextColor3 = KillActive and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
     
-    -- When turning off, restore all positions
-    if not Enabled then
+    if not KillActive then
         for playerName, position in pairs(OriginalPositions) do
             local player = Players:FindFirstChild(playerName)
             if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
@@ -134,7 +131,7 @@ Btn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Player selection dropdown button (now next to the kill button)
+-- Player selection dropdown
 local PlayerDropdown = Instance.new("TextButton", MainFrame)
 PlayerDropdown.Size = UDim2.new(0.35, -5, 0, 25)
 PlayerDropdown.Position = UDim2.new(0.63, 5, 0, 20)
@@ -142,7 +139,7 @@ PlayerDropdown.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 PlayerDropdown.BackgroundTransparency = 0.3
 PlayerDropdown.TextColor3 = Color3.fromRGB(200, 200, 200)
 PlayerDropdown.Font = Enum.Font.GothamBold
-PlayerDropdown.TextSize = 12 -- Smaller text to fit
+PlayerDropdown.TextSize = 12
 PlayerDropdown.Text = "all"
 Instance.new("UICorner", PlayerDropdown).CornerRadius = UDim.new(0, 6)
 
@@ -156,6 +153,35 @@ ViewPlayerBtn.Font = Enum.Font.GothamBold
 ViewPlayerBtn.TextSize = 12
 ViewPlayerBtn.Text = "View: OFF"
 Instance.new("UICorner", ViewPlayerBtn).CornerRadius = UDim.new(0, 6)
+
+local ClickKillBtn = Instance.new("TextButton", MainFrame)
+ClickKillBtn.Size = UDim2.new(1, -10, 0, 25)
+ClickKillBtn.Position = UDim2.new(0, 5, 0, 80)
+ClickKillBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ClickKillBtn.BackgroundTransparency = 0.3
+ClickKillBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+ClickKillBtn.Font = Enum.Font.GothamBold
+ClickKillBtn.TextSize = 14
+ClickKillBtn.Text = "ClickKill: OFF"
+Instance.new("UICorner", ClickKillBtn).CornerRadius = UDim.new(0, 6)
+
+ClickKillBtn.MouseButton1Click:Connect(function()
+    if not ScriptEnabled then return end
+    ClickKillEnabled = not ClickKillEnabled
+    ClickKillBtn.Text = ClickKillEnabled and "ClickKill: ON" or "ClickKill: OFF"
+    ClickKillBtn.TextColor3 = ClickKillEnabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
+    
+    if ClickKillEnabled then
+        SilentKillEnabled = false
+        SilentKillBtn.Text = "SilentMode: OFF"
+        SilentKillBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+    end
+    
+    if CurrentTargetHighlight then
+        CurrentTargetHighlight:Destroy()
+        CurrentTargetHighlight = nil
+    end
+end)
 
 -- SilentKill toggle button
 local SilentKillBtn = Instance.new("TextButton", MainFrame)
@@ -174,27 +200,31 @@ SilentKillBtn.MouseButton1Click:Connect(function()
     SilentKillEnabled = not SilentKillEnabled
     SilentKillBtn.Text = SilentKillEnabled and "SilentMode: ON" or "SilentMode: OFF"
     SilentKillBtn.TextColor3 = SilentKillEnabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
+    
+    if SilentKillEnabled then
+        ClickKillEnabled = false
+        ClickKillBtn.Text = "ClickKill: OFF"
+        ClickKillBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+    end
 end)
 
--- Dropdown frame (now parented to MainFrame)
+-- Dropdown frame
 local DropdownFrame = Instance.new("Frame", MainFrame)
-DropdownFrame.Size = UDim2.new(0, 150, 0, 150) -- Fixed height for scrolling
+DropdownFrame.Size = UDim2.new(0, 150, 0, 150)
 DropdownFrame.Position = UDim2.new(0, PlayerDropdown.AbsolutePosition.X - MainFrame.AbsolutePosition.X, 0, PlayerDropdown.AbsolutePosition.Y - MainFrame.AbsolutePosition.Y + 30)
 DropdownFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 DropdownFrame.BackgroundTransparency = 0.2
 DropdownFrame.Visible = false
-DropdownFrame.ZIndex = 2 -- Ensure it appears above other elements
-DropdownFrame.ClipsDescendants = true -- Important for scrolling
-Instance.new("UICorner", DropdownFrame).CornerRadius = UDim.new(0, 8)
+DropdownFrame.ZIndex = 2
+DropdownFrame.ClipsDescendants = true
 
--- Scrolling frame for dropdown content
 local DropdownScroll = Instance.new("ScrollingFrame", DropdownFrame)
 DropdownScroll.Size = UDim2.new(1, 0, 1, 0)
 DropdownScroll.BackgroundTransparency = 1
 DropdownScroll.ScrollBarThickness = 5
 DropdownScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
-DropdownScroll.CanvasSize = UDim2.new(0, 0, 0, 0) -- Will be updated dynamically
-DropdownScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y -- Auto-size to content
+DropdownScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+DropdownScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
 local DropdownLayout = Instance.new("UIListLayout", DropdownScroll)
 DropdownLayout.Padding = UDim.new(0, 5)
@@ -217,7 +247,6 @@ AllOption.MouseButton1Click:Connect(function()
     PlayerDropdown.Text = "all"
     DropdownFrame.Visible = false
     
-    -- Restore positions when changing target
     for playerName, position in pairs(OriginalPositions) do
         local plr = Players:FindFirstChild(playerName)
         if plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
@@ -229,14 +258,12 @@ end)
 
 local function updateDropdown()
     if not ScriptEnabled then return end
-    -- Clear existing player options (except "all" option)
     for _, child in ipairs(DropdownScroll:GetChildren()) do
         if child ~= AllOption and child ~= DropdownLayout then
             child:Destroy()
         end
     end
     
-    -- Add current players
     local yOffset = 0
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
@@ -257,7 +284,6 @@ local function updateDropdown()
                 PlayerDropdown.Text = player.Name
                 DropdownFrame.Visible = false
                 
-                -- Restore positions when changing target
                 for playerName, position in pairs(OriginalPositions) do
                     local plr = Players:FindFirstChild(playerName)
                     if plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
@@ -270,8 +296,6 @@ local function updateDropdown()
             yOffset = yOffset + 1
         end
     end
-    
-    -- Update canvas size (handled automatically by AutomaticCanvasSize)
 end
 
 PlayerDropdown.MouseButton1Click:Connect(function()
@@ -280,7 +304,6 @@ PlayerDropdown.MouseButton1Click:Connect(function()
     DropdownFrame.Visible = not DropdownFrame.Visible
 end)
 
--- Close dropdown when clicking elsewhere
 UserInputService.InputBegan:Connect(function(input)
     if not ScriptEnabled then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -289,7 +312,6 @@ UserInputService.InputBegan:Connect(function(input)
             local dropdownPos = DropdownFrame.AbsolutePosition
             local dropdownSize = DropdownFrame.AbsoluteSize
             
-            -- Check if click is outside dropdown
             if not (mousePos.X >= dropdownPos.X and mousePos.X <= dropdownPos.X + dropdownSize.X and
                    mousePos.Y >= dropdownPos.Y and mousePos.Y <= dropdownPos.Y + dropdownSize.Y) then
                 DropdownFrame.Visible = false
@@ -311,13 +333,93 @@ ViewPlayerBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Update camera every frame if viewing is enabled
 RunService.RenderStepped:Connect(function()
-    if not ScriptEnabled then return end
+    if not ScriptEnabled or not KillActive then return end
+    
     if ViewingEnabled and SelectedPlayer ~= "all" then
         local targetPlayer = Players:FindFirstChild(SelectedPlayer)
         if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") then
             CurrentCamera.CameraSubject = targetPlayer.Character.Humanoid
+        end
+    end
+    
+    -- Only proceed with killing if ClickKill is disabled
+    if ClickKillEnabled then return end
+    
+    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if not tool or not tool:FindFirstChild("Handle") then return end
+    
+    local handle = tool.Handle
+    
+    if SelectedPlayer == "all" then
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                local char = plr.Character
+                if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
+                    if LocalPlayer:DistanceFromCharacter(char.HumanoidRootPart.Position) <= 1000000 then
+                        if not OriginalPositions[plr.Name] and char.Humanoid.Health > 0 then
+                            OriginalPositions[plr.Name] = char.HumanoidRootPart.Position
+                        end
+                        
+                        if char.Humanoid.Health > 0 then
+                            if SilentKillEnabled then
+                                spawn(function()
+                                    shakeTool(tool, 0.5, 0.3)
+                                end)
+                            else
+                                tool:Activate()
+                            end
+                            
+                            for _, part in pairs(char:GetChildren()) do
+                                if part:IsA("BasePart") then
+                                    firetouchinterest(handle, part, 0)
+                                    firetouchinterest(handle, part, 1)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    else
+        local targetPlayer = Players:FindFirstChild(SelectedPlayer)
+        if targetPlayer then
+            local char = targetPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
+                if LocalPlayer:DistanceFromCharacter(char.HumanoidRootPart.Position) <= 1000000 then
+                    if not OriginalPositions[targetPlayer.Name] and char.Humanoid.Health > 0 then
+                        OriginalPositions[targetPlayer.Name] = char.HumanoidRootPart.Position
+                    end
+                    
+                    if char.Humanoid.Health > 0 then
+                        local originalPos = OriginalPositions[targetPlayer.Name]
+                        local targetPos = handle.Position + Vector3.new(0, 3, 0)
+                        
+                        if BringKillEnabled then
+                            spawn(function()
+                                shakeCharacter(char, 0.5, 0.3)
+                            end)
+                            
+                            flickerTeleport(targetPlayer, CFrame.new(targetPos), CFrame.new(originalPos), 0.5)
+                        end
+                        
+                        if SilentKillEnabled then
+                            spawn(function()
+                                shakeTool(tool, 0.5, 0.3)
+                            end)
+                        else
+                            tool:Activate()
+                        end
+                        
+                        for _, part in pairs(char:GetChildren()) do
+                            if part:IsA("BasePart") then
+                                firetouchinterest(handle, part, 0)
+                                firetouchinterest(handle, part, 1)
+                            end
+                        end
+                    end
+                end
+            end
         end
     end
 end)
@@ -386,7 +488,6 @@ local function flickerTeleport(player, targetCFrame, originalCFrame, duration)
     while os.clock() - startTime < duration do
         if not root or not root.Parent then break end
         
-        -- Alternate between target and original position
         if flickerCount % 2 == 0 then
             root.CFrame = targetCFrame
         else
@@ -397,7 +498,6 @@ local function flickerTeleport(player, targetCFrame, originalCFrame, duration)
         RunService.Heartbeat:Wait()
     end
     
-    -- End at target position
     if root and root.Parent then
         root.CFrame = targetCFrame
     end
@@ -415,118 +515,80 @@ local function restorePlayerPosition(playerName)
     end
 end
 
--- Track killed players
-local KilledPlayers = {}
+-- ClickKill functionality
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not ScriptEnabled or not KillActive or not ClickKillEnabled or gameProcessed then return end
+    if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
 
--- Main kill function
-RunService.RenderStepped:Connect(function()
-    if not ScriptEnabled or not Enabled then return end
-    
-    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
-    if not tool or not tool:FindFirstChild("Handle") then return end
-    
-    local handle = tool.Handle
-    
-    if SelectedPlayer == "all" then
-        -- Normal kill all function
-        for _, plr in pairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer then
-                local char = plr.Character
-                if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
-                    if LocalPlayer:DistanceFromCharacter(char.HumanoidRootPart.Position) <= 1000000 then
-                        -- Save original position if not already saved
-                        if not OriginalPositions[plr.Name] and char.Humanoid.Health > 0 then
-                            OriginalPositions[plr.Name] = char.HumanoidRootPart.Position
-                        end
-                        
-                        -- If player was alive but now dead, restore position
-                        if KilledPlayers[plr.Name] and char.Humanoid.Health <= 0 then
-                            restorePlayerPosition(plr.Name)
-                            KilledPlayers[plr.Name] = nil
-                        elseif char.Humanoid.Health > 0 then
-                            if SilentKillEnabled then
-                                -- Shake the tool instead of activating it
-                                spawn(function()
-                                    shakeTool(tool, 0.5, 0.3)
-                                end)
-                            else
-                                tool:Activate()
-                            end
-                            
-                            for _, part in pairs(char:GetChildren()) do
-                                if part:IsA("BasePart") then
-                                    firetouchinterest(handle, part, 0)
-                                    firetouchinterest(handle, part, 1)
-                                end
-                            end
-                            
-                            -- Mark player as killed
-                            KilledPlayers[plr.Name] = true
+    local mouse = LocalPlayer:GetMouse()
+    local target = mouse.Target
+    if not target then return end
+
+    local character = target:FindFirstAncestorOfClass("Model")
+    if character and Players:GetPlayerFromCharacter(character) then
+        local player = Players:GetPlayerFromCharacter(character)
+        if player == LocalPlayer then return end
+
+        -- Highlight the player
+        if CurrentTargetHighlight then
+            CurrentTargetHighlight:Destroy()
+        end
+
+        local highlight = Instance.new("Highlight")
+        highlight.FillColor = Color3.fromRGB(255, 0, 0)
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        highlight.Adornee = character
+        highlight.Parent = character
+        CurrentTargetHighlight = highlight
+
+        -- Save original position
+        if character:FindFirstChild("HumanoidRootPart") then
+            OriginalPositions[player.Name] = character.HumanoidRootPart.Position
+        end
+
+        -- Start the 3-second kill loop
+        local killStartTime = os.clock()
+        local killLoopConnection
+        
+        killLoopConnection = RunService.Heartbeat:Connect(function()
+            if os.clock() - killStartTime >= 3 then
+                killLoopConnection:Disconnect()
+                return
+            end
+            
+            if typeof(fti) == "function" then
+                pcall(function()
+                    fti("kill", player.Name)
+                end)
+            else
+                -- Fallback to normal method if fti isn't available
+                local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                if tool and tool:FindFirstChild("Handle") then
+                    for _, part in pairs(character:GetChildren()) do
+                        if part:IsA("BasePart") then
+                            firetouchinterest(tool.Handle, part, 0)
+                            firetouchinterest(tool.Handle, part, 1)
                         end
                     end
                 end
             end
-        end
-    else
-        -- Targeted player kill with BringKill effects
-        local targetPlayer = Players:FindFirstChild(SelectedPlayer)
-        if targetPlayer then
-            local char = targetPlayer.Character
-            if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
-                if LocalPlayer:DistanceFromCharacter(char.HumanoidRootPart.Position) <= 1000000 then
-                    -- Save original position if not already saved
-                    if not OriginalPositions[targetPlayer.Name] and char.Humanoid.Health > 0 then
-                        OriginalPositions[targetPlayer.Name] = char.HumanoidRootPart.Position
-                    end
-                    
-                    local originalPos = OriginalPositions[targetPlayer.Name]
-                    local targetPos = handle.Position + Vector3.new(0, 3, 0) -- 3 studs above the sword
-                    
-                    -- If player was alive but now dead, restore position
-                    if KilledPlayers[targetPlayer.Name] and char.Humanoid.Health <= 0 then
-                        restorePlayerPosition(targetPlayer.Name)
-                        KilledPlayers[targetPlayer.Name] = nil
-                    elseif char.Humanoid.Health > 0 then
-                        if BringKillEnabled then
-                            -- Shake the player first
-                            spawn(function()
-                                shakeCharacter(char, 0.5, 0.3)
-                            end)
-                            
-                            -- Flicker teleport to sword
-                            flickerTeleport(targetPlayer, CFrame.new(targetPos), CFrame.new(originalPos), 0.5)
-                        end
-                        
-                        -- Kill with silent option
-                        if SilentKillEnabled then
-                            -- Shake the tool instead of activating it
-                            spawn(function()
-                                shakeTool(tool, 0.5, 0.3)
-                            end)
-                        else
-                            tool:Activate()
-                        end
-                        
-                        for _, part in pairs(char:GetChildren()) do
-                            if part:IsA("BasePart") then
-                                firetouchinterest(handle, part, 0)
-                                firetouchinterest(handle, part, 1)
-                            end
-                        end
-                        
-                        -- Mark player as killed
-                        KilledPlayers[targetPlayer.Name] = true
-                    end
-                end
+        end)
+
+        -- Clean up highlight after 3 seconds
+        delay(3, function()
+            if CurrentTargetHighlight and CurrentTargetHighlight.Parent == character then
+                CurrentTargetHighlight:Destroy()
+                CurrentTargetHighlight = nil
             end
-        end
+        end)
     end
 end)
 
 -- Clean up when tool is unequipped
 LocalPlayer.CharacterRemoving:Connect(function()
     if not ScriptEnabled then return end
-    -- Restore all positions when character is removed (tool unequipped)
     for playerName, position in pairs(OriginalPositions) do
         local player = Players:FindFirstChild(playerName)
         if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
@@ -534,7 +596,6 @@ LocalPlayer.CharacterRemoving:Connect(function()
         end
     end
     OriginalPositions = {}
-    KilledPlayers = {}
 end)
 
 -- Update dropdown when players join/leave
@@ -550,29 +611,18 @@ Players.PlayerRemoving:Connect(function()
     end
 end)
 
--- [ LoadsScriptResources ]
-pcall(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/hm5650/LoadResources/refs/heads/main/ResSourcesLoaderSource", true))()
-    warn("StartedScript")
-end)
-
--- [[ THIS IS A SNIPPET ]] --
-
--- Import the Library
+-- Notification system
 local fnl = loadstring(game:HttpGetAsync 'https://raw.githubusercontent.com/Code1Tech/utils/main/notification.lua')()
-
--- Make a Notification function
 function notify(title, text, duration)
-  title = title or "Notification"
-  text = text or "No text provided."
-  duration = duration or 5
-  
-  fnl:MakeNotification({
-    Title = title,
-    Text = text,
-    Duration = duration
-  })
+    title = title or "Notification"
+    text = text or "No text provided."
+    duration = duration or 5
+    
+    fnl:MakeNotification({
+        Title = title,
+        Text = text,
+        Duration = duration
+    })
 end
 
--- Use the func
 notify("Quick Reminder", "This Only Works With A Sword\n\n[Script Made By @hmmm5650]", 3.5)
