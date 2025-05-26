@@ -529,11 +529,17 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         local player = Players:GetPlayerFromCharacter(character)
         if player == LocalPlayer then return end
 
-        -- Highlight the player
+        -- Remove previous highlight and GUI if they exist
         if CurrentTargetHighlight then
             CurrentTargetHighlight:Destroy()
+            CurrentTargetHighlight = nil
+        end
+        if CurrentTargetBillboard then
+            CurrentTargetBillboard:Destroy()
+            CurrentTargetBillboard = nil
         end
 
+        -- Highlight the player
         local highlight = Instance.new("Highlight")
         highlight.FillColor = Color3.fromRGB(255, 0, 0)
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
@@ -542,6 +548,70 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         highlight.Adornee = character
         highlight.Parent = character
         CurrentTargetHighlight = highlight
+
+        -- Create billboard GUI
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "TargetIndicator"
+        billboard.Adornee = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
+        billboard.Size = UDim2.new(0, 200, 0, 50)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        billboard.AlwaysOnTop = true
+        billboard.LightInfluence = 0
+        billboard.MaxDistance = 100
+        billboard.Parent = character
+
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, 0, 1, 0)
+        textLabel.BackgroundTransparency = 1
+        textLabel.Text = "Targeted: 3 seconds"
+        textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        textLabel.TextScaled = true
+        textLabel.Font = Enum.Font.SourceSansBold
+        textLabel.TextStrokeTransparency = 0
+        textLabel.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
+        textLabel.Parent = billboard
+
+        CurrentTargetBillboard = billboard
+
+        -- Update countdown text
+        local startTime = os.clock()
+        local countdownConnection
+        
+        countdownConnection = RunService.Heartbeat:Connect(function()
+            if not billboard or not billboard.Parent then
+                countdownConnection:Disconnect()
+                return
+            end
+            
+            local elapsed = os.clock() - startTime
+            local remaining = math.max(0, 3 - elapsed)
+            
+            if remaining <= 0 then
+                textLabel.Text = "Targeted: 0 seconds"
+                countdownConnection:Disconnect()
+            else
+                textLabel.Text = string.format("Targeted: %.1f seconds", remaining)
+            end
+        end)
+
+        -- Make highlight and billboard disappear after 3 seconds
+        delay(3, function()
+            if highlight and highlight.Parent then
+                highlight:Destroy()
+                if CurrentTargetHighlight == highlight then
+                    CurrentTargetHighlight = nil
+                end
+            end
+            if billboard and billboard.Parent then
+                billboard:Destroy()
+                if CurrentTargetBillboard == billboard then
+                    CurrentTargetBillboard = nil
+                end
+            end
+            if countdownConnection then
+                countdownConnection:Disconnect()
+            end
+        end)
 
         -- Save original position
         if character:FindFirstChild("HumanoidRootPart") then
@@ -573,14 +643,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                         end
                     end
                 end
-            end
-        end)
-
-        -- Clean up highlight after 3 seconds
-        delay(3, function()
-            if CurrentTargetHighlight and CurrentTargetHighlight.Parent == character then
-                CurrentTargetHighlight:Destroy()
-                CurrentTargetHighlight = nil
             end
         end)
     end
