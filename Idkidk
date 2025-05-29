@@ -362,11 +362,7 @@ RunService.RenderStepped:Connect(function()
                         end
                         
                         if char.Humanoid.Health > 0 then
-                            if SilentKillEnabled then
-                                spawn(function()
-                                    shakeTool(tool, 0.5, 0.3)
-                                end)
-                            else
+                            if not SilentKillEnabled then
                                 tool:Activate()
                             end
                             
@@ -403,11 +399,7 @@ RunService.RenderStepped:Connect(function()
                             flickerTeleport(targetPlayer, CFrame.new(targetPos), CFrame.new(originalPos), 0.5)
                         end
                         
-                        if SilentKillEnabled then
-                            spawn(function()
-                                shakeTool(tool, 0.5, 0.3)
-                            end)
-                        else
+                        if not SilentKillEnabled then
                             tool:Activate()
                         end
                         
@@ -445,35 +437,6 @@ local function shakeCharacter(char, intensity, duration)
     
     if root and root.Parent then
         root.CFrame = CFrame.new(originalPosition)
-    end
-end
-
--- Function to shake a tool
-local function shakeTool(tool, intensity, duration)
-    if not tool or not tool:FindFirstChild("Handle") then return end
-
-    local character = tool.Parent
-    if not character or not character:IsA("Model") then return end
-
-    local rightGrip = character:FindFirstChild("RightGrip")
-    if not rightGrip or not rightGrip:IsA("Weld") then return end
-
-    local originalC0 = rightGrip.C0
-    local startTime = os.clock()
-
-    while os.clock() - startTime < duration do
-        if not rightGrip or not rightGrip.Parent then break end
-        local offset = CFrame.Angles(
-            math.rad(math.random(-intensity, intensity)),
-            math.rad(math.random(-intensity, intensity)),
-            math.rad(math.random(-intensity, intensity))
-        )
-        rightGrip.C0 = originalC0 * offset
-        RunService.Heartbeat:Wait()
-    end
-
-    if rightGrip and rightGrip.Parent then
-        rightGrip.C0 = originalC0
     end
 end
 
